@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海岛奇兵 · 声纳概率预测器（自定义潜艇）</title>
+    <style>
+        :root {
+            --cell-size: 42px;
+            --gap: 3px;
+            --bg: #1a1a2e;
+            --panel-bg: #16213e;
+            --text: #e0e0e0;
+            --accent: #e94560;
+            --gold: #f0c040;
+            --sub-color: #1e5f74;
+            --empty-color: #3a3a4a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+            color: var(--text);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container {
+            background: var(--panel-bg);
+            border-radius: 20px;
+            padding: 20px 24px 24px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(135deg, #4fc3f7, #29b6f6, #0288d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 2px;
+        }
+        .header .subtitle {
+            font-size: 0.8rem;
+            color: #8899aa;
+            letter-spacing: 1px;
+        }
+
+        /* 配置区域 */
+        .config-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 12px 16px;
+            width: 100%;
+        }
+        .config-bar label {
+            font-size: 0.85rem;
+            color: #bbb;
+            white-space: nowrap;
+        }
+        .config-bar input {
+            background: #2a2a3d;
+            border: 1px solid #4a4a5a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #ffd966;
+            font-size: 0.9rem;
+            width: 160px;
+            outline: none;
+            transition: border 0.2s;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .config-bar input:focus {
+            border-color: #f0c040;
+            box-shadow: 0 0 8px rgba(240, 192, 64, 0.3);
+        }
+        .config-bar .btn-apply {
+            background: #0f4c75;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(15, 76, 117, 0.4);
+        }
+        .config-bar .btn-apply:hover {
+            background: #1b6ca8;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(27, 108, 168, 0.5);
+        }
+        .config-bar .hint {
+            font-size: 0.7rem;
+            color: #889;
+            width: 100%;
+            text-align: center;
+            margin-top: -2px;
+        }
+
+        .stats-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.85rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 10px 18px;
+            width: 100%;
+        }
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .stat-icon {
+            font-size: 1.1rem;
+        }
+        .stat-value {
+            font-weight: 700;
+            color: var(--gold);
+            font-size: 1rem;
+            min-width: 20px;
+            text-align: center;
+        }
+        .stat-label {
+            color: #aab;
+            font-size: 0.75rem;
+        }
+        .stat-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.15);
+            margin: 0 4px;
+        }
+
+        .grid-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(10, var(--cell-size));
+            grid-template-rows: repeat(10, var(--cell-size));
+            gap: var(--gap);
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 14px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            border-radius: 7px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.7rem;
+            transition: all 0.18s ease;
+            position: relative;
+            border: 2px solid transparent;
+            background: #2a2a3d;
+            color: #ccc;
+            letter-spacing: 0.3px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .cell:hover:not(.revealed) {
+            transform: scale(1.08);
+            z-index: 2;
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+        }
+        .cell.revealed {
+            cursor: default;
+            pointer-events: none;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+        }
+        .cell.submarine {
+            background: #1a5276 !important;
+            border-color: #3498db !important;
+            color: #fff;
+            font-size: 0.8rem;
+            box-shadow: 0 0 12px rgba(52, 152, 219, 0.4);
+        }
+        .cell.empty {
+            background: #2d2d3a !important;
+            border-color: #555 !important;
+            color: #777;
+            font-size: 0.75rem;
+        }
+        .cell.selected {
+            border-color: #f0c040 !important;
+            animation: pulse-border 0.8s ease-in-out infinite;
+            z-index: 3;
+            box-shadow: 0 0 18px rgba(240, 192, 64, 0.6);
+        }
+        @keyframes pulse-border {
+            0%,
+            100% {
+                border-color: #f0c040;
+                box-shadow: 0 0 12px rgba(240, 192, 64, 0.5);
+            }
+            50% {
+                border-color: #ffeb3b;
+                box-shadow: 0 0 22px rgba(255, 235, 59, 0.8);
+            }
+        }
+
+        .confirm-panel {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            padding: 10px 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            min-height: 48px;
+        }
+        .confirm-panel .prompt {
+            color: #ccc;
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+        .confirm-panel .selected-coord {
+            color: var(--gold);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+        .btn {
+            padding: 9px 18px;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+            transition: all 0.2s;
+            outline: none;
+            white-space: nowrap;
+        }
+        .btn-yes {
+            background: #27ae60;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(39, 174, 96, 0.35);
+        }
+        .btn-yes:hover {
+            background: #2ecc71;
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.5);
+            transform: translateY(-2px);
+        }
+        .btn-no {
+            background: #c0392b;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(192, 57, 43, 0.35);
+        }
+        .btn-no:hover {
+            background: #e74c3c;
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.5);
+            transform: translateY(-2px);
+        }
+        .btn-reset {
+            background: #555;
+            color: #ddd;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .btn-reset:hover {
+            background: #777;
+            transform: translateY(-2px);
+        }
+        .btn-undo {
+            background: #7f6b2e;
+            color: #fdd;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .btn-undo:hover {
+            background: #a08838;
+            transform: translateY(-2px);
+        }
+        .btn:active {
+            transform: scale(0.95);
+            transition: transform 0.08s;
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.7rem;
+            color: #999;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .legend-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            display: inline-block;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease, top 0.3s ease;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+        .toast.show {
+            opacity: 1;
+            top: 30px;
+        }
+        .toast.success {
+            background: #27ae60;
+        }
+        .toast.warning {
+            background: #e67e22;
+        }
+        .toast.error {
+            background: #c0392b;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.55);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .loading-overlay.active {
+            opacity: 1;
+        }
+        .loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #f0c040;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 500px) {
+            :root {
+                --cell-size: 30px;
+            }
+            .grid-container {
+                gap: 2px;
+                padding: 5px;
+                border-radius: 10px;
+            }
+            .cell {
+                border-radius: 4px;
+                font-size: 0.55rem;
+                border-width: 1.5px;
+            }
+            .container {
+                padding: 12px 8px 14px;
+                gap: 10px;
+                border-radius: 14px;
+            }
+            .header h1 {
+                font-size: 1.2rem;
+            }
+            .config-bar {
+                gap: 6px;
+                padding: 8px 10px;
+            }
+            .config-bar input {
+                width: 120px;
+                font-size: 0.8rem;
+                padding: 6px 8px;
+            }
+            .stats-bar {
+                gap: 6px;
+                padding: 8px 10px;
+                font-size: 0.7rem;
+            }
+            .btn {
+                padding: 7px 13px;
+                font-size: 0.75rem;
+                border-radius: 16px;
+            }
+            .confirm-panel {
+                gap: 6px;
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>🌊 声纳脉冲 · 概率预测器</h1>
+            <span class="subtitle">10×10 海域 | 自定义潜艇配置</span>
+        </div>
+
+        <!-- 潜艇配置输入区 -->
+        <div class="config-bar">
+            <label for="subLengthsInput">⚙️ 潜艇长度：</label>
+            <input type="text" id="subLengthsInput" value="5,4,3,2,2" placeholder="例如: 4,3,3,2">
+            <button class="btn-apply" id="btnApplyConfig">🚀 开始预测</button>
+            <span class="hint">用英文键盘的逗号分隔潜艇长度（1~10格），如 5,4,3,2,2</span>
+        </div>
+
+        <!-- 统计栏 -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-item">
+                <span class="stat-icon">💣</span>
+                <span class="stat-value" id="mineCount">0</span>
+                <span class="stat-label">水雷消耗</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-icon">🔍</span>
+                <span class="stat-value" id="foundCount">0</span>
+                <span class="stat-label" id="totalSubLabel">/ ? 已找到</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-icon">📊</span>
+                <span class="stat-value" id="sampleCount">-</span>
+                <span class="stat-label">采样数</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <span class="stat-icon">🎯</span>
+                <span class="stat-value" id="bestProb">-</span>
+                <span class="stat-label">最高概率</span>
+            </div>
+        </div>
+
+        <!-- 网格 -->
+        <div class="grid-wrapper" id="gridWrapper">
+            <div class="grid-container" id="gridContainer"></div>
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+
+        <!-- 确认面板 -->
+        <div class="confirm-panel" id="confirmPanel">
+            <span class="prompt">🎯 点击格子后选择：</span>
+            <span class="selected-coord" id="selectedCoord">-</span>
+            <button class="btn btn-yes" id="btnYes" disabled>✅ 有潜艇</button>
+            <button class="btn btn-no" id="btnNo" disabled>❌ 无潜艇</button>
+            <button class="btn btn-undo" id="btnUndo" disabled>↩ 撤销</button>
+            <button class="btn btn-reset" id="btnReset">🔄 重置本局</button>
+        </div>
+
+        <!-- 图例 -->
+        <div class="legend">
+            <div class="legend-item"><span class="legend-swatch" style="background:#1a5276;"></span> 已确认潜艇</div>
+            <div class="legend-item"><span class="legend-swatch" style="background:#2d2d3a;"></span> 已确认空</div>
+            <div class="legend-item"><span class="legend-swatch" style="background:#ff6b6b;"></span> 高概率(&gt;60%)</div>
+            <div class="legend-item"><span class="legend-swatch" style="background:#ffa94d;"></span> 中概率(25-60%)</div>
+            <div class="legend-item"><span class="legend-swatch" style="background:#ffe066;"></span> 低概率(10-25%)</div>
+            <div class="legend-item"><span class="legend-swatch" style="background:#b8d4e3;"></span> 极低(&lt;10%)</div>
+        </div>
+    </div>
+
+    <!-- Toast提示 -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (function() {
+            // ==================== DOM元素引用 ====================
+            const subLengthsInput = document.getElementById('subLengthsInput');
+            const btnApplyConfig = document.getElementById('btnApplyConfig');
+            const gridContainer = document.getElementById('gridContainer');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const mineCountEl = document.getElementById('mineCount');
+            const foundCountEl = document.getElementById('foundCount');
+            const totalSubLabel = document.getElementById('totalSubLabel');
+            const sampleCountEl = document.getElementById('sampleCount');
+            const bestProbEl = document.getElementById('bestProb');
+            const selectedCoordEl = document.getElementById('selectedCoord');
+            const btnYes = document.getElementById('btnYes');
+            const btnNo = document.getElementById('btnNo');
+            const btnUndo = document.getElementById('btnUndo');
+            const btnReset = document.getElementById('btnReset');
+            const toast = document.getElementById('toast');
+
+            const GRID_SIZE = 10;
+            const TARGET_SAMPLES = 8000;
+            const MAX_ATTEMPTS = 1500000;
+            const MIN_SAMPLES_FOR_DISPLAY = 50;
+
+            // ==================== 动态潜艇配置 ====================
+            let submarineLengths = [];      // 当前使用的长度数组
+            let positionPools = [];        // 每个潜艇对应的所有可能位置
+            let TOTAL_SUB_CELLS = 0;       // 所有潜艇占据的总格子数
+
+            // ==================== 游戏状态 ====================
+            let cellStates = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill('unknown'));
+            let probabilities = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+            let mineCount = 0;
+            let foundSubCells = 0;
+            let selectedCell = null;
+            let history = [];
+            let lastSampleCount = 0;
+            let samplingInProgress = false;
+
+            // ==================== 预计算潜艇位置 ====================
+            function generatePositionsForLength(length) {
+                const positions = [];
+                // 水平
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c <= GRID_SIZE - length; c++) {
+                        let mask = 0n;
+                        for (let i = 0; i < length; i++) {
+                            mask |= (1n << BigInt(r * GRID_SIZE + c + i));
+                        }
+                        positions.push({ mask, row: r, col: c, dir: 'h', length });
+                    }
+                }
+                // 垂直
+                for (let r = 0; r <= GRID_SIZE - length; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        let mask = 0n;
+                        for (let i = 0; i < length; i++) {
+                            mask |= (1n << BigInt((r + i) * GRID_SIZE + c));
+                        }
+                        positions.push({ mask, row: r, col: c, dir: 'v', length });
+                    }
+                }
+                return positions;
+            }
+
+            function buildPositionPools(lengths) {
+                return lengths.map(len => generatePositionsForLength(len));
+            }
+
+            // ==================== 约束掩码 ====================
+            function getConstraintMasks() {
+                let knownSubMask = 0n;
+                let knownEmptyMask = 0n;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const bitIndex = r * GRID_SIZE + c;
+                        if (cellStates[r][c] === 'submarine') {
+                            knownSubMask |= (1n << BigInt(bitIndex));
+                        } else if (cellStates[r][c] === 'empty') {
+                            knownEmptyMask |= (1n << BigInt(bitIndex));
+                        }
+                    }
+                }
+                return { knownSubMask, knownEmptyMask };
+            }
+
+            function countBitsBigInt(n) {
+                let count = 0;
+                while (n > 0n) {
+                    if (n & 1n) count++;
+                    n >>= 1n;
+                }
+                return count;
+            }
+
+            // ==================== 采样核心 ====================
+            function runSampling(targetSamples = TARGET_SAMPLES) {
+                if (!positionPools.length || TOTAL_SUB_CELLS === 0) {
+                    return { samples: 0, attempts: 0, hitCounts: null, impossible: true };
+                }
+                const { knownSubMask, knownEmptyMask } = getConstraintMasks();
+                const knownSubCount = countBitsBigInt(knownSubMask);
+
+                if (knownSubCount > TOTAL_SUB_CELLS) {
+                    return { samples: 0, attempts: 0, hitCounts: null, impossible: true };
+                }
+
+                const hitCounts = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+                let validSamples = 0;
+                let totalAttempts = 0;
+                const poolSizes = positionPools.map(p => p.length);
+                const numSubs = submarineLengths.length;
+
+                while (validSamples < targetSamples && totalAttempts < MAX_ATTEMPTS) {
+                    totalAttempts++;
+                    const chosenMasks = [];
+                    let combinedMask = 0n;
+                    let valid = true;
+
+                    for (let i = 0; i < numSubs; i++) {
+                        const idx = Math.floor(Math.random() * poolSizes[i]);
+                        const mask = positionPools[i][idx].mask;
+                        if (combinedMask & mask) {
+                            valid = false;
+                            break;
+                        }
+                        combinedMask |= mask;
+                        chosenMasks.push(mask);
+                    }
+                    if (!valid) continue;
+
+                    // 检查已知约束
+                    if ((combinedMask & knownSubMask) !== knownSubMask) continue;
+                    if ((combinedMask & knownEmptyMask) !== 0n) continue;
+
+                    validSamples++;
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            const bitIndex = r * GRID_SIZE + c;
+                            if (combinedMask & (1n << BigInt(bitIndex))) {
+                                hitCounts[r][c]++;
+                            }
+                        }
+                    }
+                }
+
+                const impossible = (validSamples === 0 && totalAttempts >= Math.min(MAX_ATTEMPTS, 500000));
+                return {
+                    samples: validSamples,
+                    attempts: totalAttempts,
+                    hitCounts,
+                    impossible,
+                };
+            }
+
+            function updateProbabilitiesFromSample(result) {
+                if (result.impossible) {
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (cellStates[r][c] === 'unknown') {
+                                probabilities[r][c] = -1;
+                            } else if (cellStates[r][c] === 'submarine') {
+                                probabilities[r][c] = 100;
+                            } else {
+                                probabilities[r][c] = 0;
+                            }
+                        }
+                    }
+                    lastSampleCount = 0;
+                } else if (result.samples === 0) {
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (cellStates[r][c] === 'unknown') {
+                                probabilities[r][c] = -2;
+                            } else if (cellStates[r][c] === 'submarine') {
+                                probabilities[r][c] = 100;
+                            } else {
+                                probabilities[r][c] = 0;
+                            }
+                        }
+                    }
+                    lastSampleCount = 0;
+                } else {
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (cellStates[r][c] === 'submarine') {
+                                probabilities[r][c] = 100;
+                            } else if (cellStates[r][c] === 'empty') {
+                                probabilities[r][c] = 0;
+                            } else {
+                                const prob = (result.hitCounts[r][c] / result.samples) * 100;
+                                probabilities[r][c] = Math.round(prob * 10) / 10;
+                            }
+                        }
+                    }
+                    lastSampleCount = result.samples;
+                }
+            }
+
+            // ==================== 渲染 ====================
+            function renderGrid() {
+                gridContainer.innerHTML = '';
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        cell.dataset.row = r;
+                        cell.dataset.col = c;
+                        const state = cellStates[r][c];
+                        const prob = probabilities[r][c];
+
+                        if (state === 'submarine') {
+                            cell.classList.add('revealed', 'submarine');
+                            cell.textContent = '⚓';
+                            cell.title = `(${r+1},${c+1}) 潜艇 ✓`;
+                        } else if (state === 'empty') {
+                            cell.classList.add('revealed', 'empty');
+                            cell.textContent = '✗';
+                            cell.title = `(${r+1},${c+1}) 空`;
+                        } else {
+                            cell.style.background = getProbabilityColor(prob);
+                            if (prob >= 0) {
+                                cell.textContent = prob >= 99.5 ? '●' : (prob <= 0.5 ? '' : Math.round(prob) + '%');
+                                cell.title = `(${r+1},${c+1}) 概率: ${prob.toFixed(1)}%`;
+                            } else if (prob === -1) {
+                                cell.textContent = '⚠';
+                                cell.style.background = '#4a1a1a';
+                                cell.title = '无解 - 请检查输入';
+                            } else if (prob === -2) {
+                                cell.textContent = '?';
+                                cell.style.background = '#2a2a3d';
+                                cell.title = '样本不足，请重试';
+                            }
+                            cell.addEventListener('click', () => onCellClick(r, c));
+                        }
+
+                        if (selectedCell && selectedCell.row === r && selectedCell.col === c && state === 'unknown') {
+                            cell.classList.add('selected');
+                        }
+                        gridContainer.appendChild(cell);
+                    }
+                }
+                updateStatsDisplay();
+            }
+
+            function getProbabilityColor(prob) {
+                if (prob < 0) return '#2a2a3d';
+                if (prob > 80) return '#e74c3c';
+                if (prob > 60) return '#ff6b6b';
+                if (prob > 40) return '#ff8c42';
+                if (prob > 25) return '#ffa94d';
+                if (prob > 15) return '#ffe066';
+                if (prob > 8) return '#c8e6c9';
+                if (prob > 2) return '#b8d4e3';
+                if (prob > 0.1) return '#dceefb';
+                return '#eef4f8';
+            }
+
+            function updateStatsDisplay() {
+                mineCountEl.textContent = mineCount;
+                foundCountEl.textContent = foundSubCells;
+                totalSubLabel.textContent = `/ ${TOTAL_SUB_CELLS} 已找到`;
+                sampleCountEl.textContent = lastSampleCount > 0 ? lastSampleCount.toLocaleString() : '-';
+
+                let bestProb = -1;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (cellStates[r][c] === 'unknown' && probabilities[r][c] > bestProb) {
+                            bestProb = probabilities[r][c];
+                        }
+                    }
+                }
+                bestProbEl.textContent = bestProb >= 0 ? bestProb.toFixed(1) + '%' : '-';
+
+                btnYes.disabled = (selectedCell === null);
+                btnNo.disabled = (selectedCell === null);
+                btnUndo.disabled = (history.length === 0);
+
+                if (foundSubCells >= TOTAL_SUB_CELLS && TOTAL_SUB_CELLS > 0) {
+                    showToast('🎉 恭喜！所有潜艇已找到！水雷消耗: ' + mineCount, 'success');
+                    btnYes.disabled = true;
+                    btnNo.disabled = true;
+                }
+            }
+
+            // ==================== 交互 ====================
+            function onCellClick(row, col) {
+                if (cellStates[row][col] !== 'unknown') return;
+                if (samplingInProgress) return;
+                if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
+                    selectedCell = null;
+                    selectedCoordEl.textContent = '-';
+                    renderGrid();
+                    return;
+                }
+                selectedCell = { row, col };
+                selectedCoordEl.textContent = `(${row+1}, ${col+1})`;
+                renderGrid();
+            }
+
+            function confirmSubmarine() {
+                if (!selectedCell) return;
+                const { row, col } = selectedCell;
+                if (cellStates[row][col] !== 'unknown') return;
+                history.push({ row, col, prevState: 'unknown' });
+                cellStates[row][col] = 'submarine';
+                mineCount++;
+                foundSubCells++;
+                selectedCell = null;
+                selectedCoordEl.textContent = '-';
+                recalculateAndRender();
+            }
+
+            function confirmEmpty() {
+                if (!selectedCell) return;
+                const { row, col } = selectedCell;
+                if (cellStates[row][col] !== 'unknown') return;
+                history.push({ row, col, prevState: 'unknown' });
+                cellStates[row][col] = 'empty';
+                mineCount++;
+                selectedCell = null;
+                selectedCoordEl.textContent = '-';
+                recalculateAndRender();
+            }
+
+            function undo() {
+                if (history.length === 0) return;
+                const last = history.pop();
+                const { row, col, prevState } = last;
+                if (cellStates[row][col] === 'submarine') foundSubCells--;
+                if (cellStates[row][col] !== 'unknown') mineCount--;
+                cellStates[row][col] = prevState;
+                selectedCell = null;
+                selectedCoordEl.textContent = '-';
+                recalculateAndRender();
+            }
+
+            function resetCurrentGame() {
+                if (samplingInProgress) return;
+                cellStates = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill('unknown'));
+                probabilities = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+                mineCount = 0;
+                foundSubCells = 0;
+                selectedCell = null;
+                history = [];
+                lastSampleCount = 0;
+                selectedCoordEl.textContent = '-';
+                recalculateAndRender();
+                showToast('🔄 已重置当前配置的探测', '');
+            }
+
+            // ==================== 应用新配置并重置 ====================
+            function applyNewConfig() {
+                if (samplingInProgress) {
+                    showToast('⏳ 正在计算中，请稍后重试', 'warning');
+                    return;
+                }
+                const input = subLengthsInput.value.trim();
+                if (!input) {
+                    showToast('❌ 请输入潜艇长度，例如 5,4,3,2,2', 'error');
+                    return;
+                }
+                const parts = input.split(',').map(s => s.trim()).filter(s => s !== '');
+                const lengths = [];
+                for (const p of parts) {
+                    const num = parseInt(p, 10);
+                    if (isNaN(num) || num < 1 || num > 10 || num !== parseFloat(p)) {
+                        showToast(`❌ 无效长度 "${p}"，请输入1~10之间的整数`, 'error');
+                        return;
+                    }
+                    lengths.push(num);
+                }
+                if (lengths.length === 0) {
+                    showToast('❌ 至少需要1艘潜艇', 'error');
+                    return;
+                }
+                const totalCells = lengths.reduce((a, b) => a + b, 0);
+                if (totalCells > GRID_SIZE * GRID_SIZE) {
+                    showToast('❌ 潜艇总格数超过100，无法放置', 'error');
+                    return;
+                }
+                // 理论最大可放置：简单检查长度不超过10即可，其他由采样处理
+                // 更新全局配置
+                submarineLengths = [...lengths];
+                TOTAL_SUB_CELLS = totalCells;
+                positionPools = buildPositionPools(submarineLengths);
+                // 重置游戏状态
+                cellStates = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill('unknown'));
+                probabilities = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+                mineCount = 0;
+                foundSubCells = 0;
+                selectedCell = null;
+                history = [];
+                lastSampleCount = 0;
+                selectedCoordEl.textContent = '-';
+                // 重新计算概率
+                recalculateAndRender();
+                showToast(`✅ 已应用配置：${submarineLengths.join(', ')}（共${TOTAL_SUB_CELLS}格）`, 'success');
+            }
+
+            function recalculateAndRender() {
+                if (samplingInProgress) return;
+                renderGrid();
+                setLoading(true);
+                samplingInProgress = true;
+
+                setTimeout(() => {
+                    try {
+                        const result = runSampling(TARGET_SAMPLES);
+                        updateProbabilitiesFromSample(result);
+                        lastSampleCount = result.samples;
+
+                        if (result.impossible) {
+                            showToast('⚠️ 当前约束无解，请检查之前的标记或撤销重试', 'error');
+                        } else if (result.samples < MIN_SAMPLES_FOR_DISPLAY && result.samples > 0) {
+                            showToast(`⚠️ 有效样本仅${result.samples}个，概率可能不够精确（尝试了${result.attempts.toLocaleString()}次）`, 'warning');
+                        } else if (result.samples === 0 && !result.impossible) {
+                            showToast(`⚠️ 未找到有效配置（尝试了${result.attempts.toLocaleString()}次），请检查约束`, 'warning');
+                        }
+
+                        let autoHintCount = 0;
+                        for (let r = 0; r < GRID_SIZE; r++) {
+                            for (let c = 0; c < GRID_SIZE; c++) {
+                                if (cellStates[r][c] === 'unknown' && probabilities[r][c] >= 99.95 && result.samples >= 100) {
+                                    autoHintCount++;
+                                }
+                            }
+                        }
+                        if (autoHintCount > 0 && foundSubCells < TOTAL_SUB_CELLS) {
+                            showToast(`💡 有 ${autoHintCount} 个格子概率≥99.95%，可放心标记为潜艇！`, 'success');
+                        }
+                    } catch (e) {
+                        console.error('采样出错:', e);
+                        showToast('❌ 计算出错，请重试', 'error');
+                    } finally {
+                        samplingInProgress = false;
+                        setLoading(false);
+                        renderGrid();
+                    }
+                }, 30);
+            }
+
+            function setLoading(active) {
+                if (active) {
+                    loadingOverlay.classList.add('active');
+                } else {
+                    loadingOverlay.classList.remove('active');
+                }
+            }
+
+            // ==================== Toast ====================
+            let toastTimer = null;
+            function showToast(message, type) {
+                if (toastTimer) clearTimeout(toastTimer);
+                toast.textContent = message;
+                toast.className = 'toast ' + type + ' show';
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2500);
+            }
+
+            // ==================== 事件绑定 ====================
+            btnApplyConfig.addEventListener('click', applyNewConfig);
+            btnYes.addEventListener('click', confirmSubmarine);
+            btnNo.addEventListener('click', confirmEmpty);
+            btnUndo.addEventListener('click', undo);
+            btnReset.addEventListener('click', resetCurrentGame);
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'y' || e.key === 'Y') {
+                    if (!btnYes.disabled) confirmSubmarine();
+                } else if (e.key === 'n' || e.key === 'N') {
+                    if (!btnNo.disabled) confirmEmpty();
+                } else if (e.key === 'z' || e.key === 'Z') {
+                    if (e.ctrlKey && !btnUndo.disabled) undo();
+                } else if (e.key === 'Escape') {
+                    if (selectedCell) {
+                        selectedCell = null;
+                        selectedCoordEl.textContent = '-';
+                        renderGrid();
+                    }
+                }
+            });
+
+            // ==================== 初始化：加载默认配置 ====================
+            function initialLoad() {
+                // 默认配置
+                subLengthsInput.value = '5,4,3,2,2';
+                applyNewConfig(); // 内部会验证并重置
+            }
+
+            initialLoad();
+
+            console.log('🌊 自定义潜艇声纳预测器已启动');
+            console.log('   - 10×10 海域');
+            console.log('   - 输入潜艇长度（逗号分隔）后点击"开始预测"');
+            console.log('   - 快捷键: Y=确认潜艇, N=确认空, Ctrl+Z=撤销, Esc=取消选择');
+        })();
+    </script>
+</body>
+</html>
